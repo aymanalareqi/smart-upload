@@ -1,59 +1,154 @@
-# Laravel package for mobile file uploads with Livewire-style temporary storage.
+# Smart Upload
+
+Laravel package for mobile file uploads with Livewire-style temporary storage.
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/alareqi/smart-upload.svg?style=flat-square)](https://packagist.org/packages/alareqi/smart-upload)
 [![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/alareqi/smart-upload/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/alareqi/smart-upload/actions?query=workflow%3Arun-tests+branch%3Amain)
 [![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/alareqi/smart-upload/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/alareqi/smart-upload/actions?query=workflow%3A"Fix+PHP+code+style+issues"+branch%3Amain)
 [![Total Downloads](https://img.shields.io/packagist/dt/alareqi/smart-upload.svg?style=flat-square)](https://packagist.org/packages/alareqi/smart-upload)
 
-This is where your description should go. Limit it to a paragraph or two. Consider adding a small example.
-
-## Support us
-
-[<img src="https://github-ads.s3.eu-central-1.amazonaws.com/smart_upload.jpg?t=1" width="419px" />](https://spatie.be/github-ad-click/smart_upload)
-
-We invest a lot of resources into creating [best in class open source packages](https://spatie.be/open-source). You can support us by [buying one of our paid products](https://spatie.be/open-source/support-us).
-
-We highly appreciate you sending us a postcard from your hometown, mentioning which of our package(s) you are using. You'll find our address on [our contact page](https://spatie.be/about-us). We publish all received postcards on [our virtual postcard wall](https://spatie.be/open-source/postcards).
+This package provides a simple way to handle file uploads from mobile apps. Files are uploaded to a temporary location, then moved to their final destination when the form is submitted.
 
 ## Installation
-
-You can install the package via composer:
 
 ```bash
 composer require alareqi/smart-upload
 ```
 
-You can publish and run the migrations with:
+Migrations will be auto-published. Run migrations:
 
 ```bash
-php artisan vendor:publish --tag="smart-upload-migrations"
 php artisan migrate
 ```
 
-You can publish the config file with:
+## How It Works
 
-```bash
-php artisan vendor:publish --tag="smart-upload-config"
+```
+┌─────────────┐     /init      ┌─────────────┐
+│ Mobile App  │ ──────────▶ │   Laravel  │
+│             │             │   Server   │
+│ 1.Select   │  ◀──────── │ 2.Return  │
+│    file    │   upload   │   signed  │
+│             │    URL    │    URL   │
+│ 3.Upload   │ ──────────▶ │          │
+│    to URL  │  4.Upload │          │
+│             │    file   │          │
+│5.Submit    │ ──────────▶ │6.Move to │
+│    form   │   form     │ final    │
+│             │   data    │ location │
+└─────────────┘             └─────────────┘
 ```
 
-This is the contents of the published config file:
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|------------|
+| POST | `/api/upload/init` | Get upload URL |
+
+### 1. Initialize Upload
+
+Request a signed upload URL:
+
+```http
+POST /api/upload/init
+Content-Type: application/json
+
+{
+    "filename": "photo.jpg"
+}
+```
+
+Response:
+
+```json
+{
+    "uuid": "abc-123-uuid",
+    "upload_url": "https://yourapp.com/storage/tmp/abc-123.jpg?token=...",
+    "expires_at": "2024-01-01T12:00:00Z"
+}
+```
+
+### 2. Cancel Upload
+
+Cancel an upload and delete the temporary file:
+
+```http
+DELETE /api/upload/{uuid}
+```
+
+## Laravel Controller Usage
+
+Use the `HasFileUploads` trait in your controller:
+
+```php
+use Alareqi\SmartUpload\Concerns\HasFileUploads;
+use Illuminate\Http\Request;
+
+class PostController extends Controller
+{
+    use HasFileUploads;
+
+    public function store(Request $request)
+    {
+        // Convert temporary upload to permanent storage
+        $path = $this->convertUpload(
+            $request->image_uuid,  // UUID from mobile
+            'posts/images'        // Final directory
+        );
+
+        // Save to database
+        Post::create([
+            'title' => $request->title,
+            'image' => $path,
+        ]);
+    }
+}
+```
+
+## Configuration
+
+Edit `config/smart-upload.php`:
 
 ```php
 return [
+    // Final storage disk
+    'disk' => env('SMART_UPLOAD_DISK', 'local'),
+
+    // Temporary directory
+    'temp_directory' => env('SMART_UPLOAD_TEMP_DIR', 'smart-upload-tmp'),
+
+    // Hours until temp file expires
+    'expiration_hours' => 24,
+
+    // Max file size in KB
+    'max_file_size' => 10240,
+
+    // Allowed mimes
+    'allowed_mimes' => ['jpg', 'jpeg', 'png', 'gif', 'pdf'],
+
+    // Temporary upload settings
+    'temporary_file_upload' => [
+        'disk' => 'local',
+        'directory' => 'tmp',
+    ],
 ];
 ```
 
-Optionally, you can publish the views using
+## Cleanup Command
+
+Run cleanup to delete expired temporary files:
 
 ```bash
-php artisan vendor:publish --tag="smart-upload-views"
+php artisan smart-upload:cleanup
 ```
 
-## Usage
+Schedule it in `app/Console/Kernel.php`:
 
 ```php
-$smartUpload = new Alareqi\SmartUpload();
-echo $smartUpload->echoPhrase('Hello, Alareqi!');
+protected function schedule(Schedule $schedule)
+{
+    $schedule->command('smart-upload:cleanup')->hourly();
+}
 ```
 
 ## Testing
