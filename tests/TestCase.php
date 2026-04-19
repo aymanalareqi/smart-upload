@@ -2,9 +2,9 @@
 
 namespace Alareqi\SmartUpload\Tests;
 
+use Alareqi\SmartUpload\SmartUploadServiceProvider;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Orchestra\Testbench\TestCase as Orchestra;
-use Alareqi\SmartUpload\SmartUploadServiceProvider;
 
 class TestCase extends Orchestra
 {

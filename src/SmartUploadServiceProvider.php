@@ -2,9 +2,9 @@
 
 namespace Alareqi\SmartUpload;
 
+use Alareqi\SmartUpload\Commands\SmartUploadCommand;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
-use Alareqi\SmartUpload\Commands\SmartUploadCommand;
 
 class SmartUploadServiceProvider extends PackageServiceProvider
 {
