@@ -1,0 +1,14 @@
+parameters:
+    ignoreErrors:
+        -
+            message: '#^Access to an undefined property#'
+            path: src/Support/*.php
+        -
+            message: '#^Access to an undefined property#'
+            path: src/Jobs/*.php
+        -
+            message: '#^Called .env. outside of the config directory#'
+            path: config/*.php
+        -
+            message: '#^Trait.*is used zero times#'
+            path: src/Concerns/*.php

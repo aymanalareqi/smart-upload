@@ -4,16 +4,10 @@ namespace Alareqi\SmartUpload\Jobs;
 
 use Alareqi\SmartUpload\Models\TemporaryUpload;
 use Illuminate\Console\Command;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
 
-class CleanupExpiredUploads extends Command implements ShouldQueue
+class CleanupExpiredUploads extends Command
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
-
     protected $signature = 'smart-upload:cleanup';
 
     protected $description = 'Clean up expired temporary uploads';
