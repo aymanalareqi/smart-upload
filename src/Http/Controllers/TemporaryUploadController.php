@@ -27,13 +27,6 @@ class TemporaryUploadController extends Controller
         return response()->json($result);
     }
 
-    public function finish(string $uuid): JsonResponse
-    {
-        $success = $this->uploader->finish($uuid);
-
-        return response()->json(['success' => $success]);
-    }
-
     public function cancel(string $uuid): JsonResponse
     {
         $success = $this->uploader->cancel($uuid);
