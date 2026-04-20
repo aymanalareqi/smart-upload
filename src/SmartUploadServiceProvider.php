@@ -14,10 +14,7 @@ class SmartUploadServiceProvider extends PackageServiceProvider
         $package
             ->name('smart-upload')
             ->hasConfigFile()
-            ->hasViews()
-            ->hasMigration('create_smart_upload_table')
-            ->hasRoutes('api')
-            ->hasCommand(CleanupExpiredUploads::class);
+            ->hasRoutes('api');
     }
 
     public function register(): void
