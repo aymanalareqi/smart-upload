@@ -2,7 +2,6 @@
 
 namespace Alareqi\SmartUpload\Support;
 
-use Alareqi\SmartUpload\Models\TemporaryUpload;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -30,31 +29,30 @@ class FileUploader
         $uuid = (string) Str::uuid();
 
         $extension = pathinfo($filename, PATHINFO_EXTENSION);
-        $storedFilename = $uuid.'.'.$extension;
+        $storedFilename = $uuid . '.' . $extension;
 
         $expiresAt = now()->addHours($this->expirationHours);
 
-        $upload = TemporaryUpload::create([
+        $metadata = [
             'uuid' => $uuid,
             'original_name' => $filename,
-            'mime_type' => null,
-            'size' => 0,
-            'path' => $this->tempDirectory.'/'.$storedFilename,
-            'disk' => $this->tempDisk,
-            'expires_at' => $expiresAt,
-        ]);
+            'expires_at' => $expiresAt->toIso8601String(),
+        ];
+
+        $metadataFile = $this->tempDirectory . '/' . $uuid . '.meta.json';
+        Storage::disk($this->tempDisk)->put($metadataFile, json_encode($metadata));
 
         $disk = Storage::disk($this->tempDisk);
 
         if ($this->tempDisk === 's3') {
             $uploadUrl = $disk->temporaryUrl(
-                $upload->path,
+                $this->tempDirectory . '/' . $storedFilename,
                 $expiresAt,
                 ['Content-Type' => 'application/octet-stream']
             );
         } else {
-            $uploadUrl = $disk->path($upload->path);
-            $uploadUrl .= '?token='.$uuid;
+            $uploadUrl = $disk->path($this->tempDirectory . '/' . $storedFilename);
+            $uploadUrl .= '?token=' . $uuid;
         }
 
         return [
@@ -64,48 +62,92 @@ class FileUploader
         ];
     }
 
+    protected function getMetadata(string $uuid): ?array
+    {
+        $metadataFile = $this->tempDirectory . '/' . $uuid . '.meta.json';
+
+        if (! Storage::disk($this->tempDisk)->exists($metadataFile)) {
+            return null;
+        }
+
+        $content = Storage::disk($this->tempDisk)->get($metadataFile);
+
+        return json_decode($content, true);
+    }
+
+    protected function deleteMetadata(string $uuid): void
+    {
+        $metadataFile = $this->tempDirectory . '/' . $uuid . '.meta.json';
+        Storage::disk($this->tempDisk)->delete($metadataFile);
+    }
+
+    protected function findTempFile(string $uuid): ?string
+    {
+        $files = Storage::disk($this->tempDisk)->files($this->tempDirectory);
+
+        foreach ($files as $file) {
+            $filename = basename($file);
+            if (str_starts_with($filename, $uuid . '.')) {
+                return $file;
+            }
+        }
+
+        return null;
+    }
+
     public function cancel(string $uuid): bool
     {
-        $upload = TemporaryUpload::where('uuid', $uuid)->first();
+        $metadata = $this->getMetadata($uuid);
 
-        if (! $upload) {
+        if (! $metadata) {
             return false;
         }
 
-        Storage::disk($upload->disk)->delete($upload->path);
-        $upload->delete();
+        $tempFile = $this->findTempFile($uuid);
+
+        if ($tempFile) {
+            Storage::disk($this->tempDisk)->delete($tempFile);
+        }
+
+        $this->deleteMetadata($uuid);
 
         return true;
     }
 
     public function convert(string $uuid, string $directory, ?string $filename = null): string
     {
-        $upload = TemporaryUpload::where('uuid', $uuid)->first();
+        $metadata = $this->getMetadata($uuid);
 
-        if (! $upload) {
+        if (! $metadata) {
             throw new \RuntimeException("Temporary upload not found: {$uuid}");
         }
 
-        $originalName = $upload->original_name;
+        $originalName = $metadata['original_name'];
         $newFilename = $filename ?? $originalName;
 
-        $path = $directory.'/'.$newFilename;
+        $path = $directory . '/' . $newFilename;
+
+        $tempFile = $this->findTempFile($uuid);
+
+        if (! $tempFile) {
+            throw new \RuntimeException("Temporary file not found: {$uuid}");
+        }
 
         $disk = config('smart-upload.disk', 'local');
 
         Storage::disk($disk)->writeStream(
             $path,
-            Storage::disk($upload->disk)->readStream($upload->path)
+            Storage::disk($this->tempDisk)->readStream($tempFile)
         );
 
-        Storage::disk($upload->disk)->delete($upload->path);
-        $upload->delete();
+        Storage::disk($this->tempDisk)->delete($tempFile);
+        $this->deleteMetadata($uuid);
 
         return $path;
     }
 
-    public function getUpload(string $uuid): ?TemporaryUpload
+    public function getUpload(string $uuid): ?array
     {
-        return TemporaryUpload::where('uuid', $uuid)->first();
+        return $this->getMetadata($uuid);
     }
 }

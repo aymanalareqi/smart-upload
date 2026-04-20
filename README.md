@@ -1,6 +1,6 @@
 # Smart Upload
 
-Laravel package for mobile file uploads with Livewire-style temporary storage.
+Laravel package for mobile file uploads with temporary storage - no database required.
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/alareqi/smart-upload.svg?style=flat-square)](https://packagist.org/packages/alareqi/smart-upload)
 [![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/alareqi/smart-upload/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/alareqi/smart-upload/actions?query=workflow%3Arun-tests+branch%3Amain)
@@ -15,26 +15,22 @@ This package provides a simple way to handle file uploads from mobile apps. File
 composer require alareqi/smart-upload
 ```
 
-Migrations will be auto-published. Run migrations:
-
-```bash
-php artisan migrate
-```
+No migrations needed - this package uses file-based temporary storage.
 
 ## How It Works
 
 ```
-┌─────────────┐     /init      ┌─────────────┐
-│ Mobile App  │ ──────────▶ │   Laravel  │
-│             │             │   Server   │
-│ 1.Select   │  ◀──────── │ 2.Return  │
-│    file    │   upload   │   signed  │
-│             │    URL    │    URL   │
-│ 3.Upload   │ ──────────▶ │          │
-│    to URL  │  4.Upload │          │
+┌─────────────┐     /upload-file ┌─────────────┐
+│ Mobile App  │ ────────────▶ │   Laravel  │
+│             │               │   Server   │
+│ 1.Select   │ ◀─────────── │ 2.Return  │
+│    file    │    upload   │   signed  │
+│             │     URL    │    URL   │
+│ 3.Upload   │ ────────────▶ │          │
+│    to URL   │  4.Upload  │          │
 │             │    file   │          │
-│5.Submit    │ ──────────▶ │6.Move to │
-│    form   │   form     │ final    │
+│5.Submit     │ ────────────▶ │6.Move to │
+│    form    │   form     │ final    │
 │             │   data    │ location │
 └─────────────┘             └─────────────┘
 ```
@@ -43,14 +39,14 @@ php artisan migrate
 
 | Method | Endpoint | Description |
 |--------|----------|------------|
-| POST | `/api/upload/init` | Get upload URL |
+| POST | `/api/upload-file` | Get upload URL |
 
-### 1. Initialize Upload
+### Get Upload URL
 
 Request a signed upload URL:
 
 ```http
-POST /api/upload/init
+POST /api/upload-file
 Content-Type: application/json
 
 {
@@ -66,14 +62,6 @@ Response:
     "upload_url": "https://yourapp.com/storage/tmp/abc-123.jpg?token=...",
     "expires_at": "2024-01-01T12:00:00Z"
 }
-```
-
-### 2. Cancel Upload
-
-Cancel an upload and delete the temporary file:
-
-```http
-DELETE /api/upload/{uuid}
 ```
 
 ## Laravel Controller Usage
