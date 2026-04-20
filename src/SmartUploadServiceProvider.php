@@ -2,7 +2,6 @@
 
 namespace Alareqi\SmartUpload;
 
-use Alareqi\SmartUpload\Jobs\CleanupExpiredUploads;
 use Alareqi\SmartUpload\Support\FileUploader;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
