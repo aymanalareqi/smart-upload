@@ -3,7 +3,7 @@
 // config for Alareqi/SmartUpload
 
 return [
-    'disk' => env('SMART_UPLOAD_DISK', 'local'),
+    'disk' => env('SMART_UPLOAD_DISK', env('FILESYSTEM_DISK', 'local')),
 
     'temp_directory' => env('SMART_UPLOAD_TEMP_DIR', 'smart-upload-tmp'),
 
