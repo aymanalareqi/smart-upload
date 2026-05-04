@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use TusPhp\Cache\FileStore;
+use TusPhp\Events\UploadComplete;
 use TusPhp\Tus\Server as TusServer;
 
 class TusController extends Controller
@@ -24,7 +25,7 @@ class TusController extends Controller
         $disk = Storage::disk($tempDisk);
 
         // Ensure the temporary directory exists on the disk
-        if (! $disk->exists($tempPath)) {
+        if (!$disk->exists($tempPath)) {
             $disk->makeDirectory($tempPath);
         }
 
@@ -32,9 +33,10 @@ class TusController extends Controller
         $uploadDir = $disk->path($tempPath);
 
         $cacheDir = storage_path('framework/cache/tus');
-        if (! file_exists($cacheDir)) {
+        if (!file_exists($cacheDir)) {
             mkdir($cacheDir, 0777, true);
         }
+
 
         // Initialize server with custom file cache directory
         $cacheAdapter = new FileStore($cacheDir);
@@ -43,6 +45,11 @@ class TusController extends Controller
         $this->server->setUploadDir($uploadDir);
         // We set the API path to /api/tus to match our route in routes/api.php
         $this->server->setApiPath('/api/tus');
+
+        // Add event listener for upload completion
+        $this->server->event()->addListener(UploadComplete::NAME, function (UploadComplete $event) {
+            $this->finalizeSmartUpload($event->getFile());
+        });
     }
 
     /**
@@ -53,64 +60,32 @@ class TusController extends Controller
         try {
             $response = $this->server->serve();
 
-            // After handling, check if any upload was completed in this request
-            if ($request->isMethod('PATCH') || $request->isMethod('POST')) {
-                // For TUS, completion is usually checked after a PATCH
-                // However, some clients might send everything in one go or we check by key
-                $path = $request->getPathInfo();
-                $key = basename($path);
-
-                // If key is 'tus', it's the creation request, no completion yet
-                if ($key !== 'tus' && $key !== '' && $this->isUploadComplete($key)) {
-                    $this->finalizeSmartUpload($key);
-                }
-            }
-
             return $response;
         } catch (\Exception $e) {
-            Log::error('TUS Error: '.$e->getMessage(), [
+            Log::error('TUS Error: ' . $e->getMessage(), [
                 'exception' => $e,
                 'path' => $request->getPathInfo(),
                 'method' => $request->method(),
             ]);
 
             return response()->json([
-                'message' => 'TUS Server Error: '.$e->getMessage(),
+                'message' => 'TUS Server Error: ' . $e->getMessage(),
                 'path' => $request->getPathInfo(),
             ], 500);
         }
     }
 
     /**
-     * Check if the TUS upload is complete.
-     */
-    protected function isUploadComplete(string $key): bool
-    {
-        $uploadDir = $this->server->getUploadDir();
-        $filePath = $uploadDir.DIRECTORY_SEPARATOR.$key;
-
-        $metadata = $this->server->getCache()->get($key);
-
-        if (! $metadata) {
-            return false;
-        }
-
-        return (int) $metadata['offset'] === (int) $metadata['size'];
-    }
-
-    /**
      * Finalize the upload by creating a SmartUpload compatible cache entry.
      */
-    protected function finalizeSmartUpload(string $key): void
+    protected function finalizeSmartUpload(\TusPhp\File $file): void
     {
-        $metadata = $this->server->getCache()->get($key);
-        if (! $metadata) {
-            return;
-        }
+        $key = $file->getKey();
+        $metadata = $file->details();
 
         $originalName = $metadata['metadata']['name'] ?? 'file';
         $extension = pathinfo($originalName, PATHINFO_EXTENSION);
-        $extension = $extension ? '.'.$extension : '';
+        $extension = $extension ? '.' . $extension : '';
 
         $config = config('smart-upload');
         $tempDisk = $config['temporary_file_upload']['disk'] ?? 'local';
@@ -121,14 +96,14 @@ class TusController extends Controller
 
         // Current file path (from TUS buffer)
         $uploadDir = $this->server->getUploadDir();
-        $sourcePath = $uploadDir.DIRECTORY_SEPARATOR.$metadata['name'];
+        $sourcePath = $uploadDir . DIRECTORY_SEPARATOR . $metadata['name'];
 
         // Target file path (SmartUpload style)
-        $storedFilename = $key.$extension;
-        $targetSubPath = $tempPath.'/'.$storedFilename;
+        $storedFilename = $key . $extension;
+        $targetSubPath = $tempPath . '/' . $storedFilename;
 
         // Ensure the source exists and target does not
-        if (file_exists($sourcePath) && ! $disk->exists($targetSubPath)) {
+        if (file_exists($sourcePath) && !$disk->exists($targetSubPath)) {
             // Move file to the final temporary destination on the disk
             if ($tempDisk === 'local') {
                 rename($sourcePath, $disk->path($targetSubPath));
